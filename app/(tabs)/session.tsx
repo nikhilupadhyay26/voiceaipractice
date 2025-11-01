@@ -7,7 +7,8 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const USING_EMULATOR = true; // set false if testing on a physical phone
-const BASE = USING_EMULATOR ? 'http://10.0.2.2:5001' : 'http://192.168.1.33:5001';
+const BASE = "https://talkcoach.duckdns.org";
+//const BASE = USING_EMULATOR ? 'http://10.0.2.2:5001' : 'http://192.168.1.33:5001';
 const STT_URL = `${BASE}/transcribe`;
 const TTS_URL = `${BASE}/tts`;
 const CHAT_URL = `${BASE}/chat`;
