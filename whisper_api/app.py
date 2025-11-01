@@ -8,6 +8,8 @@ from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from faster_whisper import WhisperModel
 import os, subprocess, uuid, pathlib
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://host.docker.internal:11434")
+
 
 PIPER_BIN   = os.getenv("PIPER_BIN", "/usr/local/bin/piper")
 PIPER_MODEL = os.getenv("PIPER_MODEL", "/models/en_US-amy-medium.onnx")
@@ -163,7 +165,7 @@ def chat():
         user_prompt = f"""Context:\n{context_str or '(none)'}\n\nUser said:\n{user_text}\n\nGive a concise, tailored coaching response."""
 
         # Call Ollama locally
-        ollama_url = "http://127.0.0.1:11434/api/chat"
+        ollama_url = f"{OLLAMA_URL}/api/chat"
         payload = {
             "model": "llama3.2:3b",
             "messages": [
@@ -274,7 +276,7 @@ def analyze():
             }
         }
 
-        r = requests.post("http://127.0.0.1:11434/api/chat", json=payload, timeout=90)
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=90)
         if r.status_code != 200:
             return jsonify({"error": "ollama_failed", "detail": r.text[:500]}), 500
 
