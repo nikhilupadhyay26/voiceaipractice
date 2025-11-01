@@ -112,7 +112,7 @@ def tts():
     except Exception as e:
         return jsonify({"error": "tts exception", "detail": str(e)}), 500
 
-    return jsonify({"url": f"static/tts/{fname}"})
+    return jsonify({"url": f"/static/tts/{fname}"})
 
 
 import requests

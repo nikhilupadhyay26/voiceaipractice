@@ -8,13 +8,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const USING_EMULATOR = true; // set false if testing on a physical phone
 const BASE = "https://talkcoach.duckdns.org";
-//const BASE = USING_EMULATOR ? 'http://10.0.2.2:5001' : 'http://192.168.1.33:5001';
+// const BASE = USING_EMULATOR ? 'http://10.0.2.2:5001' : 'http://192.168.1.33:5001';
 const STT_URL = `${BASE}/transcribe`;
 const TTS_URL = `${BASE}/tts`;
 const CHAT_URL = `${BASE}/chat`;
 const ANALYZE_URL = `${BASE}/analyze`;
 
 type Turn = { role: 'assistant' | 'user'; text: string };
+
+// --- Helper: resolve TTS/asset URLs returned by API ---
+function resolveRemoteUrl(urlFromApi: string): string {
+  // If API returns absolute URL, use it as-is
+  if (!urlFromApi) return '';
+  if (urlFromApi.startsWith('http://') || urlFromApi.startsWith('https://')) {
+    return urlFromApi;
+  }
+  // Ensure there is exactly one slash between BASE and path
+  const needsLeadingSlash = !urlFromApi.startsWith('/');
+  return `${BASE}${needsLeadingSlash ? '/' : ''}${urlFromApi}`;
+}
 
 export default function SessionScreen() {
   const router = useRouter();
@@ -119,11 +131,17 @@ export default function SessionScreen() {
         const body = await res.text();
         throw new Error(`TTS HTTP ${res.status}: ${body.slice(0, 200)}`);
       }
-      const { url } = await res.json();
-      if (!url) throw new Error('No TTS URL returned');
+
+      const data = await res.json();
+      if (!data?.url) throw new Error('No TTS URL returned');
+
+      const resolvedUrl = resolveRemoteUrl(data.url);
 
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync({ uri: url });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: resolvedUrl },
+        { shouldPlay: true }
+      );
       soundRef.current = sound;
 
       sound.setOnPlaybackStatusUpdate(async (status: any) => {
@@ -134,7 +152,8 @@ export default function SessionScreen() {
         }
       });
 
-      await sound.playAsync();
+      // If not auto-played by shouldPlay
+      // await sound.playAsync();
     } catch (e) {
       setIsSpeaking(false);
       Alert.alert('TTS error', String(e));
@@ -149,7 +168,7 @@ export default function SessionScreen() {
         return;
       }
 
-      const res = await fetch(`${BASE}/chat`, {
+      const res = await fetch(CHAT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
