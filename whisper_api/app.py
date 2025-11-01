@@ -7,6 +7,11 @@ import subprocess
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from faster_whisper import WhisperModel
+import os, subprocess, uuid, pathlib
+
+PIPER_BIN   = os.getenv("PIPER_BIN", "/usr/local/bin/piper")
+PIPER_MODEL = os.getenv("PIPER_MODEL", "/models/en_US-amy-medium.onnx")
+ESPEAK_DATA = os.getenv("ESPEAK_DATA", "/usr/share/espeak-ng-data")
 
 # ------------------------------------------------------------------
 # Prevent duplicate OpenMP runtime warnings on Windows
@@ -56,50 +61,57 @@ PIPER_EXE  = r"C:\Tools\Piper\piper.exe"
 VOICE_PATH = r"C:\Tools\Piper\en_US-amy-medium.onnx"
 ESPEAK_DIR = r"C:\Tools\Piper\espeak-ng-data"  # optional, if exists
 
-@app.post("/tts")
+@app.route("/tts", methods=["POST"])
 def tts():
-    """Generate speech audio from text using Piper (text via stdin to avoid hangs)."""
+    import os, subprocess, uuid, pathlib, shutil
+    from flask import request, jsonify
+
+    text = (request.get_json() or {}).get("text", "").strip()
+    if not text:
+        return jsonify({"error": "no text"}), 400
+
+    PIPER_BIN   = os.getenv("PIPER_BIN", "/usr/local/bin/piper")
+    PIPER_MODEL = os.getenv("PIPER_MODEL", "/models/en_US-amy-medium.onnx")
+    ESPEAK_DATA = os.getenv("ESPEAK_DATA", "/usr/share/espeak-ng-data")
+
+    # --- sanity checks (fail fast with clear messages) ---
+    if not os.path.isfile(PIPER_BIN):
+        return jsonify({"error": "piper binary not found", "path": PIPER_BIN}), 500
+    if not os.access(PIPER_BIN, os.X_OK):
+        try:
+            os.chmod(PIPER_BIN, 0o755)
+        except Exception as e:
+            return jsonify({"error": "piper not executable", "detail": str(e)}), 500
+    if not os.path.isfile(PIPER_MODEL):
+        return jsonify({"error": "piper model not found", "path": PIPER_MODEL}), 500
+    if not os.path.isdir(ESPEAK_DATA):
+        return jsonify({"error": "espeak data not found", "path": ESPEAK_DATA}), 500
+
+    # output dir inside the app
+    out_dir = pathlib.Path(app.root_path) / "static" / "tts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fname = f"{uuid.uuid4().hex}.wav"
+    out_path = str(out_dir / fname)
+
+    # run Piper with stdin
+    cmd = [PIPER_BIN, "-m", PIPER_MODEL, "-f", out_path, "--espeak-data", ESPEAK_DATA]
     try:
-        data = request.get_json(force=True)
-        text = (data.get("text") or "").strip()
-        if not text:
-            return jsonify({"error": "no text"}), 400
-
-        out_name = f"tts_{uuid.uuid4().hex}.wav"
-        out_path = os.path.join(app.static_folder, "tts", out_name)
-
-        # Build Piper command WITHOUT --text; we pass the text via stdin.
-        cmd = [
-            PIPER_EXE,
-            "-m", VOICE_PATH,
-            "-f", out_path,
-            # Optional runtime knobs; safe defaults
-            "--length_scale", "1.0",
-            "--noise_scale", "0.667",
-            "--noise_w", "0.8",
-        ]
-
-        # Run Piper and feed UTF-8 text on stdin. Bigger timeout for first run.
-        proc = subprocess.run(
-            cmd,
-            input=text,
-            capture_output=True,
-            text=True,
-            timeout=180,
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-
-        if proc.returncode != 0:
-            print("PIPER STDERR:\n", proc.stderr)
-            print("PIPER STDOUT:\n", proc.stdout)
-            return jsonify({"error": "piper_failed", "stderr": proc.stderr[:500]}), 500
-
-        file_url = f"http://{request.host}/static/tts/{out_name}"
-        return jsonify({"url": file_url})
-
+        stdout, stderr = proc.communicate(text.encode("utf-8"))
+        if proc.returncode != 0 or not os.path.exists(out_path):
+            # surface Piper error text to logs and response
+            err = (stderr or b"").decode("utf-8", errors="ignore")
+            print("PIPER_CMD:", " ".join(cmd))
+            print("PIPER_STDERR:", err[:1000])
+            return jsonify({"error": "piper failed", "detail": err[:500]}), 500
     except Exception as e:
-        print("TTS ERROR:", e)
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"error": "tts exception", "detail": str(e)}), 500
+
+    return jsonify({"url": f"static/tts/{fname}"})
+
 
 import requests
 import json
