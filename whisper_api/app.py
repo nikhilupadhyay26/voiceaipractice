@@ -167,7 +167,7 @@ def chat():
         # Call Ollama locally
         ollama_url = f"{OLLAMA_URL}/api/chat"
         payload = {
-            "model": "llama3.2:3b",
+            "model": "qwen2:0.5b",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -262,7 +262,7 @@ def analyze():
         )
 
         payload = {
-            "model": "llama3.2:3b",
+            "model": "qwen2:0.5b",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user",   "content": user_prompt}
