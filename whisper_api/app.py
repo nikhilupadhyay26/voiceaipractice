@@ -179,7 +179,7 @@ def chat():
             }
         }
 
-        r = requests.post(ollama_url, json=payload, timeout=60)
+        r = requests.post(ollama_url, json=payload, timeout=300)
         if r.status_code != 200:
             return jsonify({"error": "ollama_failed", "detail": r.text[:500]}), 500
 
@@ -276,7 +276,7 @@ def analyze():
             }
         }
 
-        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=90)
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=300)
         if r.status_code != 200:
             return jsonify({"error": "ollama_failed", "detail": r.text[:500]}), 500
 
